@@ -7,6 +7,7 @@ except ImportError:
     class PluginConfig:
         pass
 
+
 class NetBoxDDNSConfig(PluginConfig):
     name = 'netbox_ddns'
     verbose_name = 'Dynamic DNS'
