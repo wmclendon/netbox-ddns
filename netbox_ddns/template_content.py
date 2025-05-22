@@ -6,7 +6,10 @@ from . import tables
 
 
 class ReverseZoneRecreate(PluginTemplateExtension):
+    # NetBox up to 4.1
     model = 'netbox_ddns.reversezone'
+    # NetBox from 4.2, required to be present as of NetBox 4.3
+    models = [model]
 
     def buttons(self):
         """
@@ -20,7 +23,10 @@ class ReverseZoneRecreate(PluginTemplateExtension):
 
 
 class ZoneRecreate(PluginTemplateExtension):
+    # NetBox up to 4.1
     model = 'netbox_ddns.zone'
+    # NetBox from 4.2, required to be present as of NetBox 4.3
+    models = [model]
 
     def buttons(self):
         """
@@ -34,7 +40,10 @@ class ZoneRecreate(PluginTemplateExtension):
 
 
 class DNSInfo(PluginTemplateExtension):
+    # NetBox up to 4.1
     model = 'ipam.ipaddress'
+    # NetBox from 4.2, required to be present as of NetBox 4.3
+    models = [model]
 
     def buttons(self):
         """
