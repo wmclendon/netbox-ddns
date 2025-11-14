@@ -3,9 +3,9 @@
         {% csrf_token %}
 
         <button type="submit" name="_edit"
-                formaction="{% url 'plugins:netbox_ddns:ipaddress_dnsname_recreate' ipaddress_pk=object.pk %}"
+                formaction="{% url 'plugins:netbox_ddns:reversezone_recreate_record' pk=object.pk %}"
                 class="btn btn-secondary">
-            <span class="mdi mdi-refresh" aria-hidden="true"></span> Recreate DNS
+            <span class="mdi mdi-refresh" aria-hidden="true"></span> Recreate all Records
         </button>
     </form>
 {% endif %}
