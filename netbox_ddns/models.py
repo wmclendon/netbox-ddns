@@ -18,7 +18,7 @@ from ipam.fields import IPNetworkField
 from ipam.models import IPAddress
 from utilities.querysets import RestrictedQuerySet
 from .utils import normalize_fqdn
-from .validators import HostnameAddressValidator, HostnameValidator, validate_base64, MinValueValidator, \
+from .validators import DNSNameValidator, HostnameAddressValidator, HostnameValidator, validate_base64, MinValueValidator, \
     MaxValueValidator
 
 logger = logging.getLogger('netbox_ddns')
@@ -64,6 +64,9 @@ def get_rcode_display(code):
     else:
         return _('Unknown response: {}').format(code)
 
+class Protocol(models.TextChoices):
+    UDP = 'udp', _('UDP')
+    TCP = 'tcp', _('TCP')
 
 class Server(NetBoxModel):
     server = models.CharField(
@@ -95,6 +98,12 @@ class Server(NetBoxModel):
         validators=[validate_base64],
         help_text=_('in base64 notation'),
     )
+    protocol = models.CharField(
+        verbose_name=_('Protocol'),
+        max_length=3,
+        choices=Protocol.choices,
+        default=Protocol.UDP,
+    )
 
     class Meta:
         unique_together = (
@@ -119,7 +128,10 @@ class Server(NetBoxModel):
 
     @property
     def address(self) -> Optional[str]:
-        return socket.gethostbyname(self.server)
+        addrinfo = socket.getaddrinfo(self.server, self.server_port, proto=socket.IPPROTO_UDP)
+        for family, _, _, _, sockaddr in addrinfo:
+            if family in (socket.AF_INET, socket.AF_INET6) and sockaddr[0]:
+                return sockaddr[0]
 
     def create_update(self, zone: str) -> dns.update.Update:
         return dns.update.Update(
@@ -374,7 +386,7 @@ class ExtraDNSName(NetBoxModel):
     name = models.CharField(
         verbose_name=_('DNS name'),
         max_length=255,
-        validators=[HostnameValidator()],
+        validators=[DNSNameValidator()],
     )
 
     last_update = models.DateTimeField(

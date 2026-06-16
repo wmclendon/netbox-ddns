@@ -9,7 +9,7 @@ from django_rq import job
 from dns import rcode
 from netaddr import ip
 
-from netbox_ddns.models import ACTION_CREATE, ACTION_DELETE, DNSStatus, RCODE_NO_ZONE, ReverseZone, Zone
+from netbox_ddns.models import ACTION_CREATE, ACTION_DELETE, DNSStatus, RCODE_NO_ZONE, ReverseZone, Zone, Protocol
 from netbox_ddns.utils import get_soa
 
 logger = logging.getLogger('netbox_ddns')
@@ -28,6 +28,17 @@ def status_update(output: List[str], operation: str, response) -> None:
     output.append(message)
 
 
+def send_dns_update(update, server, protocol):
+    """Send DNS update via TCP or UDP. Returns response or None on unknown protocol."""
+    if protocol == Protocol.TCP:
+        return dns.query.tcp(update, server.address, port=server.server_port)
+    elif protocol == Protocol.UDP:
+        return dns.query.udp(update, server.address, port=server.server_port)
+    else:
+        logger.error(f"Unknown protocol {protocol} for server {server}")
+        return None
+
+
 def create_forward(dns_name: str, address: ip.IPAddress, status: Optional[DNSStatus], output: List[str]):
     if status:
         status.forward_action = ACTION_CREATE
@@ -38,6 +49,7 @@ def create_forward(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
 
         # Check the SOA, we don't want to write to a parent zone if it has delegated authority
         soa = get_soa(zone.name)
+        protocol = zone.server.protocol
         if soa == zone.name:
             record_type = 'A' if address.version == 4 else 'AAAA'
             update = zone.server.create_update(zone.name)
@@ -47,7 +59,9 @@ def create_forward(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
                 record_type,
                 str(address)
             )
-            response = dns.query.udp(update, zone.server.address, port=zone.server.server_port)
+            response = send_dns_update(update, zone.server, protocol)
+            if response is None:
+                return
             status_update(output, f'Adding {dns_name} {record_type} {address}', response)
             if status:
                 status.forward_rcode = response.rcode()
@@ -72,6 +86,7 @@ def delete_forward(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
 
         # Check the SOA, we don't want to write to a parent zone if it has delegated authority
         soa = get_soa(zone.name)
+        protocol = zone.server.protocol
         if soa == zone.name:
             record_type = 'A' if address.version == 4 else 'AAAA'
             update = zone.server.create_update(zone.name)
@@ -80,7 +95,9 @@ def delete_forward(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
                 record_type,
                 str(address)
             )
-            response = dns.query.udp(update, zone.server.address, port=zone.server.server_port)
+            response = send_dns_update(update, zone.server, protocol)
+            if response is None:
+                return
             status_update(output, f'Deleting {dns_name} {record_type} {address}', response)
             if status:
                 status.forward_rcode = response.rcode()
@@ -106,6 +123,7 @@ def create_reverse(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
 
         # Check the SOA, we don't want to write to a parent zone if it has delegated authority
         soa = get_soa(record_name)
+        protocol = zone.server.protocol
         if soa == zone.name:
             update = zone.server.create_update(zone.name)
             update.add(
@@ -114,7 +132,9 @@ def create_reverse(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
                 'ptr',
                 dns_name
             )
-            response = dns.query.udp(update, zone.server.address, port=zone.server.server_port)
+            response = send_dns_update(update, zone.server, protocol)
+            if response is None:
+                return
             status_update(output, f'Adding {record_name} PTR {dns_name}', response)
             if status:
                 status.reverse_rcode = response.rcode()
@@ -140,6 +160,7 @@ def delete_reverse(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
 
         # Check the SOA, we don't want to write to a parent zone if it has delegated authority
         soa = get_soa(record_name)
+        protocol = zone.server.protocol
         if soa == zone.name:
             update = zone.server.create_update(zone.name)
             update.delete(
@@ -147,7 +168,9 @@ def delete_reverse(dns_name: str, address: ip.IPAddress, status: Optional[DNSSta
                 'ptr',
                 dns_name
             )
-            response = dns.query.udp(update, zone.server.address, port=zone.server.server_port)
+            response = send_dns_update(update, zone.server, protocol)
+            if response is None:
+                return
             status_update(output, f'Deleting {record_name} PTR {dns_name}', response)
             if status:
                 status.reverse_rcode = response.rcode()
